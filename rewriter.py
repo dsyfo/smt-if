@@ -46,6 +46,12 @@ def rewrite_message(messages, messagenum):
 
 
 if __name__ == "__main__":
+    if len(argv) < 5:
+        print "\n".join([
+            "python rewriter.py <input file> <output file> <address> <message number>",
+            "    address - Hex address of a data chunk inside rom. Ex: 804c38",
+            "    message number - Which message to edit."])
+        exit(0)
     infile, outfile, address, messagenum = tuple(argv[1:5])
     system("cp %s %s" % (infile, outfile))
     infile = open(infile, "rb")
