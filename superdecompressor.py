@@ -1,5 +1,5 @@
 from os import system
-from utils import int2ints, ints2int, hexify, gen_formatted, str2byte
+from utils import int2ints, ints2int, gen_formatted
 
 
 HEADER_SIZE = 12
@@ -262,86 +262,6 @@ class Datapack:
             chunk = map(lambda x: x & 0xff, chunk)
             outfile.write("".join(map(chr, chunk)))
             outfile.seek(outfile.tell() + BLOCK_HEADER_SIZE)
-
-    def repl_w_kanji(self, data):
-        output = data[:4]
-        base = 0x100
-        for i in range(base, base + 0xa5):
-            if i % 0x3c == 0 and i != base:
-                output += [0x01, 0xff, 0x02, 0xff]
-            if i % 0xc == 0 and i != base:
-                if i % 0x3c:
-                    output += [0x03, 0xff]
-                output += int2ints(str2byte[hexify(((i)%0x100)/0x10)], 2)
-                output += int2ints(str2byte[hexify(i % 0x10)], 2)
-                output += [0xfe, 0xff]
-            value = int2ints(i, 2)
-            output += value
-        output += [1, 0xff, 0xff, 0xff, 0x0, 0x0, 0x0, 0x0]
-        return output
-
-    def repl_w_bullshit(self, data):
-        #output = data[:20]
-        #output = data[13*4:]
-        output = []
-        text = (
-"""What the fuck did you just
-fucking say about me you
-little bitch? I'll have you
-know I graduated top of my
-class in the Navy Seals and
-I've been involved in aaaaaaaaaaa
-numerous secret raids on
-Al-Quaeda and I have over""")
-        """300 confirmed kills. I am
-trained in gorilla warfare
-words. You think you can get"""
-        text = "0"
-        newline_count = 0
-        #pointers = [0]*13
-        pointers = [0]
-        n = 0
-        for i, c in enumerate(text):
-            output += int2ints(str2byte[c], 2)
-            if c == "\n":
-                newline_count += 1
-                if newline_count == 4:
-                    output = output[:-2]
-                    output += int2ints(0xff01, 2)
-                    output += int2ints(0xfe02, 2)
-                    newline_count = 0
-                    n += 1
-                    #pointers[n] = len(output)
-                    #pointers.append(len(output))
-        output = output + [1, 0xff, 0xff, 0xff]
-        while len(pointers) < 13:
-            pointers.append(len(output))
-            output += [0x29 + len(pointers), 0x0, 0x01, 0xff, 0xff, 0xff]
-        print hexify(pointers)
-        pointers = map(lambda x: x + (len(pointers)*4), pointers)
-        print hexify(pointers)
-        pointers = [i for j in map(lambda x: int2ints(x, 4), pointers) for i in j]
-        print hexify(pointers)
-        output = pointers + output + [0x0, 0x0]
-        return output
-
-    def edit_top(self):
-        x = None
-        prev = None
-        print len(self.d_first)
-        while True:
-            x = raw_input("Address? ")
-            if x == 'x':
-                break
-            elif x == '':
-                x = prev + 1
-            else:
-                x = int(x)
-            prev = x
-            print hexify(self.d_first[x])
-            y = int(raw_input("Value? "), 16)
-            self.d_first[x] = y & 0xff
-            print hexify(self.d_first[x])
 
     def extract_messages(self):
         pointers = []
