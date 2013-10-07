@@ -33,7 +33,7 @@ class Datapack:
         self.baseaddr = address
 
         header = self.get_header(0)
-        self.seek_next_nonzero(ints2int(header[ENDADDR_LOCATION:ENDADDR_LOCATION + 2]) + 1)
+        self.seek_next_nonzero(ints2int(header[ENDADDR_LOCATION:ENDADDR_LOCATION + 2]))
         midderaddr = self.fakeaddress
         midder = self.get_header(midderaddr)
         endaddr = midderaddr + ints2int(midder[ENDADDR_LOCATION:ENDADDR_LOCATION + 2])
@@ -239,17 +239,18 @@ class Datapack:
     def write(self, outfile, first=None, second=None):
         # TODO: Display a warning when new size exceeds limits
         first = first or self.c_first
-        header = ([1, 2, 0, 0] + int2ints(len(self.c_first) + HEADER_SIZE, 2) +
-                  [0, 0] + int2ints(len(self.d_first) + HEADER_SIZE, 2) +
+        header = ([1, 2, 0, 0] + [0xff, 0xff] +
+                  [0, 0] + int2ints(len(first) + HEADER_SIZE, 2) +
                   [0, 0] + [None])
         top = self.generate_compress_locations(header + first, first=True)
         offset = (-1 * len(top)) % 4  # align midder to multiple of 4
         top += [0] * offset
+        top = top[:4] + int2ints(len(top), 2) + top[6:]
 
         second = second or self.c_second
         endaddr = roundup(len(top) + len(second) + HEADER_SIZE, 0x800) - len(top) - 1
         midder = ([1, 2, 0, 0] + int2ints(endaddr, 2) +
-                  [0, 0] + int2ints(len(self.d_second) + HEADER_SIZE, 2) +
+                  [0, 0] + int2ints(len(second) + HEADER_SIZE, 2) +
                   [0, 0] + [None])
         bottom = self.generate_compress_locations(midder + second)
 
