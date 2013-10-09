@@ -4,6 +4,7 @@ from superdecompressor import Datapack
 from utils import gen_formatted, str2byte, int2ints
 
 def rewrite_message(messages, messagenum):
+    messages = [m[:-2] for m in messages]
     f = open("rewriter.tmp", "w+")
     f.write(gen_formatted(messages[messagenum-1]))
     f.write("\n")
@@ -42,6 +43,7 @@ def rewrite_message(messages, messagenum):
     messages[messagenum - 1] = message
     f.close()
     system("rm rewriter.tmp")
+    messages = [m + [0xff, 0xff] for m in messages]
     return messages
 
 
