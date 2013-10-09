@@ -46,21 +46,29 @@ def rewrite_message(messages, messagenum):
 
 
 if __name__ == "__main__":
-    if len(argv) < 5:
+    if len(argv) < 4:
         print "\n".join([
             "python rewriter.py <input file> <output file> <address> <message number>",
             "    address - Hex address of a data chunk inside rom. Ex: 804c38",
-            "    message number - Which message to edit."])
+            "    message number - Which message to edit (omit for all)."])
         exit(0)
-    infile, outfile, address, messagenum = tuple(argv[1:5])
+    infile, outfile, address = tuple(argv[1:4])
+    if len(argv) >= 5:
+        messagenum = int(argv[4])
+    else:
+        messagenum = None
     system("cp %s %s" % (infile, outfile))
     infile = open(infile, "rb")
     outfile = open(outfile, "r+b")
     address = int(address, 16)
-    messagenum = int(messagenum)
     d = Datapack(infile=infile, address=address)
     messages = d.extract_messages()
-    d.messages = rewrite_message(messages, messagenum)
+    if messagenum is None:
+        for i in range(len(messages)):
+            messages = rewrite_message(messages, i+1)
+    else:
+        messages = rewrite_message(messages, messagenum)
+    d.messages = messages
     d.compile_messages()
     d.recompress()
     d.write(outfile)
