@@ -1,5 +1,5 @@
 from os import system
-from utils import int2ints, ints2int, gen_formatted
+from utils import int2ints, ints2int, gen_formatted, hexify
 
 
 HEADER_SIZE = 12
@@ -39,9 +39,16 @@ class Datapack:
         endaddr = midderaddr + ints2int(midder[ENDADDR_LOCATION:ENDADDR_LOCATION + 2])
         assert self.peek(endaddr) == 0
 
-        self.c_first, self.c_second = self.get_data(midderaddr, endaddr)
-        self.d_first = self.decom_data(data=self.c_first)
-        self.d_second = self.decom_data(data=self.c_second)
+        self.c_first, self.c_second = self.get_data(midderaddr, endaddr,
+                                                    headerlen=len(header), midderlen=len(midder))
+        if header[:2] == [1, 0]:
+            self.d_first = list(self.c_first)
+        else:
+            self.d_first = self.decom_data(data=self.c_first)
+        if midder[:2] == [1, 0]:
+            self.d_second = list(self.c_second)
+        else:
+            self.d_second = self.decom_data(data=self.c_second)
 
     @property
     def fakeaddress(self):
@@ -89,11 +96,18 @@ class Datapack:
     def get_header(self, address=None):
         if address is not None:
             self.seek(address)
-        header = self.read(HEADER_SIZE)
-        assert header[0] == 1
+        kind = self.read(2)
+        self.infile.seek(self.infile.tell() - 2)
+        if kind == [1, 2]:
+            header = self.read(HEADER_SIZE)
+        elif kind == [1, 0]:
+            header = self.read(HEADER_SIZE - 4)
+        else:
+            assert False
         return header
 
-    def get_data(self, midderaddr, endaddr):
+    def get_data(self, midderaddr, endaddr,
+                 headerlen=HEADER_SIZE, midderlen=HEADER_SIZE):
         endaddr = roundup(endaddr, BLOCK_SIZE) - 1
         breaks = (endaddr / BLOCK_SIZE) + 1
         data = []
@@ -103,8 +117,8 @@ class Datapack:
             data.extend(d)
 
         assert not len(data) % BLOCK_SIZE
-        first, second = (data[HEADER_SIZE:midderaddr],
-                         data[midderaddr + HEADER_SIZE:])
+        first, second = (data[headerlen:midderaddr],
+                         data[midderaddr + midderlen:])
 
         def remove_trailing(data):
             while data[-1] == 0:
@@ -135,10 +149,10 @@ class Datapack:
             elif upcoming == 0:
                 if not data:
                     break
-                elif data[0] & 0xe0 != 0x80:
+                elif data[0] & 0x80 != 0x80:
                     finished = True
                     continue
-                #assert data[0] & 0xe0 == 0x80
+                #assert data[0] & 0x80 == 0x80
                 assert len(data) >= 2
                 length = data[0] - 0x80 + 3
                 lookback = -1 * (data[1] + 1)
@@ -151,7 +165,7 @@ class Datapack:
                 if not data:
                     break
 
-                if data[0] & 0xe0 == 0x80:
+                if data[0] & 0x80 == 0x80:
                     upcoming = 0
                 else:
                     upcoming = data[0] + 1
@@ -276,6 +290,7 @@ class Datapack:
             message = []
             while True:
                 chars = self.d_second[pointer:pointer+2]
+                assert chars
                 message += chars
                 pointer += 2
                 if chars == [0xff, 0xff]:
@@ -297,8 +312,9 @@ class Datapack:
 if __name__ == "__main__":
     system("cp %s %s" % ("smt_if_clean.bin", "smt_if.bin"))
     infile = open("smt_if_clean.bin", 'rb')
-    address = 0x804c38
+    #address = 0x804c38
     #address = 0x804308
+    address = 0x7f9478
     d = Datapack(infile, address)
     #d.d_second = self.repl_w_bullshit(self.d_second)
     #d.d_second = self.repl_w_kanji(self.d_second)
@@ -309,7 +325,7 @@ if __name__ == "__main__":
     d.recompress()
 
     #d.write(outfile, d.d_first, d.d_second)
-    d.write(outfile)
+    #d.write(outfile)
 
     infile.close()
     print gen_formatted(d.d_first)
