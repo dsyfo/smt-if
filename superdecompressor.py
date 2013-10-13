@@ -9,8 +9,6 @@ BLOCK_HEADER_SIZE = 0x130
 BLOCK_SIZE = 0x800
 PERIOD = BLOCK_HEADER_SIZE + BLOCK_SIZE
 
-outfile = open("smt_if.bin", 'r+b')
-
 
 def roundup(value, step):
     current = 0
@@ -41,6 +39,8 @@ class Datapack:
 
         self.c_first, self.c_second = self.get_data(midderaddr, endaddr,
                                                     headerlen=len(header), midderlen=len(midder))
+
+        #TODO: Include first section in message extraction if uncompressed
         if header[:2] == [1, 0]:
             self.d_first = list(self.c_first)
         else:
@@ -153,7 +153,8 @@ class Datapack:
                     finished = True
                     continue
                 #assert data[0] & 0x80 == 0x80
-                assert len(data) >= 2
+                if len(data) == 1:
+                    data.append(0)
                 length = data[0] - 0x80 + 3
                 lookback = -1 * (data[1] + 1)
                 assert abs(lookback) <= len(uncompressed)
@@ -312,6 +313,8 @@ class Datapack:
 if __name__ == "__main__":
     system("cp %s %s" % ("smt_if_clean.bin", "smt_if.bin"))
     infile = open("smt_if_clean.bin", 'rb')
+    outfile = open("smt_if.bin", 'r+b')
+
     #address = 0x804c38
     #address = 0x804308
     address = 0x7f9478
