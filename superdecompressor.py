@@ -29,16 +29,20 @@ class Datapack:
     def __init__(self, infile, address):
         self.infile = infile
         self.baseaddr = address
+        self.infile.seek(self.baseaddr)
 
-        header = self.get_header(0)
-        self.seek_next_nonzero(ints2int(header[ENDADDR_LOCATION:ENDADDR_LOCATION + 2]))
-        midderaddr = self.fakeaddress
-        midder = self.get_header(midderaddr)
-        endaddr = midderaddr + ints2int(midder[ENDADDR_LOCATION:ENDADDR_LOCATION + 2])
-        assert self.peek(endaddr) == 0
+        headers = []
+        datas = []
+        while True:
+            header, data = self.get_header_and_data()
+            if header and data:
+                headers.append(header)
+                datas.append(data)
+            else:
+                break
 
-        self.c_first, self.c_second = self.get_data(midderaddr, endaddr,
-                                                    headerlen=len(header), midderlen=len(midder))
+        (header, midder) = tuple(headers[:2])
+        (self.c_first, self.c_second) = tuple(datas[:2])
 
         #TODO: Include first section in message extraction if uncompressed
         if header[:2] == [1, 0]:
@@ -53,8 +57,11 @@ class Datapack:
     @property
     def fakeaddress(self):
         address = self.infile.tell()
+        if address == self.baseaddr:
+            return 0
         breaks = ((address - self.baseaddr) / BLOCK_SIZE) + 1
-        return address - (BLOCK_HEADER_SIZE * breaks) - self.baseaddr
+        fakeaddress = address - (BLOCK_HEADER_SIZE * breaks) - self.baseaddr
+        return fakeaddress
 
     def seek(self, address):
         assert address >= 0
@@ -87,47 +94,43 @@ class Datapack:
         assert (self.infile.tell() - self.baseaddr) % PERIOD >= BLOCK_HEADER_SIZE
 
     def read(self, numbytes):
-        current = self.infile.tell()
-        assert (current - self.baseaddr) % PERIOD >= BLOCK_HEADER_SIZE
-        assert (current - self.baseaddr) % PERIOD + numbytes <= PERIOD
-        assert not 0 < (current + numbytes - self.baseaddr) % PERIOD < BLOCK_HEADER_SIZE
-        return map(ord, self.infile.read(numbytes))
+        data = []
+        while len(data) < numbytes:
+            current = self.infile.tell()
+            assert (current - self.baseaddr) % PERIOD >= BLOCK_HEADER_SIZE
+            distance = (self.baseaddr - current) % PERIOD
+            if distance == 0:
+                self.seek_rel(BLOCK_HEADER_SIZE)
+                distance = BLOCK_SIZE
+            assert distance <= BLOCK_SIZE
+            distance = min(distance, numbytes - len(data))
+            data.extend(map(ord, self.infile.read(distance)))
+        return data
 
     def get_header(self, address=None):
         if address is not None:
             self.seek(address)
+        self.seek_rel((0 - self.infile.tell()) % 4)
         kind = self.read(2)
         self.infile.seek(self.infile.tell() - 2)
         if kind == [1, 2]:
             header = self.read(HEADER_SIZE)
         elif kind == [1, 0]:
             header = self.read(HEADER_SIZE - 4)
+        elif kind == [0, 0]:
+            header = None
         else:
             assert False
         return header
 
-    def get_data(self, midderaddr, endaddr,
-                 headerlen=HEADER_SIZE, midderlen=HEADER_SIZE):
-        endaddr = roundup(endaddr, BLOCK_SIZE) - 1
-        breaks = (endaddr / BLOCK_SIZE) + 1
-        data = []
-        for i in range(breaks):
-            self.seek(i * BLOCK_SIZE)
-            d = self.read(BLOCK_SIZE)
-            data.extend(d)
-
-        assert not len(data) % BLOCK_SIZE
-        first, second = (data[headerlen:midderaddr],
-                         data[midderaddr + midderlen:])
-
-        def remove_trailing(data):
-            while data[-1] == 0:
-                data = data[:-1]
-            return data
-
-        first, second = tuple(map(remove_trailing, (first, second)))
-
-        return first, second
+    def get_header_and_data(self):
+        header = self.get_header()
+        if header is not None:
+            length = ints2int(header[ENDADDR_LOCATION:ENDADDR_LOCATION + 2])
+            length = length - len(header)
+            return header, self.read(length)
+        else:
+            return None, None
 
     def decom_data(self, data):
         uncompressed = []
