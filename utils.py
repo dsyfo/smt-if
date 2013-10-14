@@ -50,10 +50,13 @@ def int2ints(value, size, bigend=True):
 
 def hexify(data):
     h = lambda n: "%x" % n
-    if type(data) is list:
-        return map(h, data)
-    else:
-        return h(data)
+    try:
+        if type(data) in (list, tuple):
+            return map(h, data)
+        else:
+            return h(data)
+    except TypeError:
+        return None
 
 
 def is_unicode_kanji(char):
