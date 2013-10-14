@@ -168,6 +168,9 @@ class Datapack:
 
                 if data[0] & 0x80 == 0x80:
                     upcoming = 0
+                elif len(data) <= data[0] + 2:
+                    finished = True
+                    data = data[1:]
                 else:
                     upcoming = data[0] + 1
                     data = data[1:]
@@ -212,7 +215,7 @@ class Datapack:
                 output.append(lengthbyte)
                 output.append(location)
                 assert 0x80 <= int(lengthbyte, 16) <= 0xff
-                assert location < 0xff
+                assert location <= 0xff
                 COMPRESSED_FLAG = True
                 buff += data[:i]
                 data = data[i:]
@@ -231,7 +234,7 @@ class Datapack:
         self.c_first = self.recom_data(self.d_first)
         self.c_second = self.recom_data(self.d_second)
 
-    def generate_compress_locations(self, output, first=False):
+    def generate_compress_locations(self, output):
         prev = None
         for i in range(len(output)-1, -1, -1):
             if type(output[i]) is str:
@@ -243,11 +246,7 @@ class Datapack:
                     output[i] = prev - i - 2
                     prev = False
                 else:
-                    if first:
-                        #output[i] = len(output) - i - 1
-                        output[i] = 0xff
-                    else:
-                        output[i] = 0
+                    output[i] = max(0, len(output) - i - 1)
 
         return output
 
@@ -257,7 +256,7 @@ class Datapack:
         header = ([1, 2, 0, 0] + [0xff, 0xff] +
                   [0, 0] + int2ints(len(first) + HEADER_SIZE, 2) +
                   [0, 0] + [None])
-        top = self.generate_compress_locations(header + first, first=True)
+        top = self.generate_compress_locations(header + first)
         offset = (-1 * len(top)) % 4  # align midder to multiple of 4
         top += [0] * offset
         top = top[:4] + int2ints(len(top), 2) + top[6:]
