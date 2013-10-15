@@ -79,7 +79,7 @@ if __name__ == "__main__":
     outfile = open(outfile, "r+b")
     address = int(address, 16)
     d = Datapack(infile=infile, address=address)
-    messages = d.extract_messages()
+    messages = d.messageslist[1]
     if len(argv) >= 6:
         messages[messagenum - 1] = get_kanji_filled_message(int(argv[5], 16))
     else:
@@ -88,7 +88,5 @@ if __name__ == "__main__":
                 messages = rewrite_message(messages, i+1)
         else:
             messages = rewrite_message(messages, messagenum)
-    d.messages = messages
-    d.compile_messages()
-    d.recompress()
-    d.write(outfile)
+    d.messageslist[1] = messages
+    d.compile_and_write(outfile)

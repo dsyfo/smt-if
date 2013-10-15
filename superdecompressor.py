@@ -41,25 +41,23 @@ class Datapack:
             else:
                 break
 
-        (header, midder) = tuple(headers[:2])
-        (self.c_first, self.c_second) = tuple(datas[:2])
+        self.datas = []
+        for header, data in zip(headers, datas):
+            if header[:2] == [1, 0]:
+                self.datas.append(data)
+            elif header[:2] == [1, 2]:
+                self.datas.append(self.decom_data(data))
+            else:
+                assert False
 
-        #TODO: Include first section in message extraction if uncompressed
-        if header[:2] == [1, 0]:
-            self.d_first = list(self.c_first)
-        else:
-            self.d_first = self.decom_data(data=self.c_first)
-        if midder[:2] == [1, 0]:
-            self.d_second = list(self.c_second)
-        else:
-            self.d_second = self.decom_data(data=self.c_second)
+        self.extract_all_messages()
 
     @property
     def fakeaddress(self):
         address = self.infile.tell()
         if address == self.baseaddr:
             return 0
-        breaks = ((address - self.baseaddr) / BLOCK_SIZE) + 1
+        breaks = ((address - self.baseaddr) / PERIOD) + 1
         fakeaddress = address - (BLOCK_HEADER_SIZE * breaks) - self.baseaddr
         return fakeaddress
 
@@ -97,7 +95,6 @@ class Datapack:
         data = []
         while len(data) < numbytes:
             current = self.infile.tell()
-            assert (current - self.baseaddr) % PERIOD >= BLOCK_HEADER_SIZE
             distance = (self.baseaddr - current) % PERIOD
             if distance == 0:
                 self.seek_rel(BLOCK_HEADER_SIZE)
@@ -155,7 +152,6 @@ class Datapack:
                 elif data[0] & 0x80 != 0x80:
                     finished = True
                     continue
-                #assert data[0] & 0x80 == 0x80
                 if len(data) == 1:
                     data.append(0)
                 length = data[0] - 0x80 + 3
@@ -169,7 +165,7 @@ class Datapack:
                 if not data:
                     break
 
-                if data[0] & 0x80 == 0x80:
+                if data[0] != 0xff and data[0] & 0x80 == 0x80:
                     upcoming = 0
                 elif len(data) <= data[0] + 2:
                     finished = True
@@ -190,27 +186,28 @@ class Datapack:
         output = []
         COMPRESSED_FLAG = False
         while data:
+            options = [(0, 0)]
             for i in range(len(data)):
                 buff = buff[-1*0xff:]
-                if contains_slice(buff, data[:i]) is not None:
-                    continue
+                k = i
+                compress_index = contains_slice(buff, data[:k])
+                if compress_index is not None:
+                    if data[:k] == buff[compress_index:]:
+                        window, following = data[:k], data[k:]
+                        j = 0
+                        while True:
+                            if following[:j+1] == window[:j+1]:
+                                j += 1
+                                if len(window) <= j:
+                                    window = window + window
+                            else:
+                                break
+                        k = k + j
+                    options.append((k, compress_index))
                 else:
                     break
 
-            i = i - 1
-            compress_index = contains_slice(buff, data[:i])
-            if data[:i] == buff[compress_index:]:
-                window, following = data[:i], data[i:]
-                j = 0
-                while True:
-                    if following[:j+1] == window[:j+1]:
-                        j += 1
-                        if len(window) <= j:
-                            window = window + window
-                    else:
-                        break
-                i = i + j
-
+            i, compress_index = max(options)
             if i >= 3:
                 #assumption: these values are not retrieved in decompression
                 lengthbyte = "%x" % (0x80 + i - 3)
@@ -233,10 +230,6 @@ class Datapack:
 
         return output
 
-    def recompress(self):
-        self.c_first = self.recom_data(self.d_first)
-        self.c_second = self.recom_data(self.d_second)
-
     def generate_compress_locations(self, output):
         prev = None
         for i in range(len(output)-1, -1, -1):
@@ -249,29 +242,24 @@ class Datapack:
                     output[i] = prev - i - 2
                     prev = False
                 else:
-                    output[i] = max(0, len(output) - i - 1)
+                    output[i] = 0xff
+                assert output[i] <= 0xff
 
         return output
 
-    def write(self, outfile, first=None, second=None):
+    def prepare_for_write(self, data):
         # TODO: Display a warning when new size exceeds limits
-        first = first or self.c_first
         header = ([1, 2, 0, 0] + [0xff, 0xff] +
-                  [0, 0] + int2ints(len(first) + HEADER_SIZE, 2) +
+                  [0, 0] + int2ints(len(data) + HEADER_SIZE, 2) +
                   [0, 0] + [None])
-        top = self.generate_compress_locations(header + first)
-        offset = (-1 * len(top)) % 4  # align midder to multiple of 4
-        top += [0] * offset
-        top = top[:4] + int2ints(len(top), 2) + top[6:]
+        data = self.recom_data(data)
+        data = self.generate_compress_locations(header + data)
+        offset = (-1 * len(data)) % 4  # align midder to multiple of 4
+        data += [0] * offset
+        data = data[:4] + int2ints(len(data), 2) + data[6:]
+        return data
 
-        second = second or self.c_second
-        endaddr = roundup(len(top) + len(second) + HEADER_SIZE, 0x800) - len(top) - 1
-        midder = ([1, 2, 0, 0] + int2ints(endaddr, 2) +
-                  [0, 0] + int2ints(len(second) + HEADER_SIZE, 2) +
-                  [0, 0] + [None])
-        bottom = self.generate_compress_locations(midder + second)
-
-        data = top + bottom
+    def write(self, outfile, data):
         outfile.seek(self.baseaddr + BLOCK_HEADER_SIZE)
         while data:
             chunk, data = data[:BLOCK_SIZE], data[BLOCK_SIZE:]
@@ -281,35 +269,57 @@ class Datapack:
             outfile.write("".join(map(chr, chunk)))
             outfile.seek(outfile.tell() + BLOCK_HEADER_SIZE)
 
-    def extract_messages(self):
+    def extract_messages(self, data):
         pointers = []
         while True:
             location = len(pointers)*4
             if pointers and location >= min(pointers):
                 break
-            pointers.append(ints2int(self.d_second[location:location+4]))
-        self.messages = []
+            pointers.append(ints2int(data[location:location+4]))
+        messages = []
         for pointer in pointers:
             message = []
             while True:
-                chars = self.d_second[pointer:pointer+2]
-                assert chars
+                chars = data[pointer:pointer+2]
+                if not chars:
+                    message = None
+                    break
                 message += chars
                 pointer += 2
                 if chars == [0xff, 0xff]:
                     break
-            self.messages.append(message)
-        return self.messages
+            messages.append(message)
+        if None in messages:
+            return None
+        else:
+            return messages
 
-    def compile_messages(self):
-        currentpointer = len(self.messages) * 4
-        self.d_second = []
-        for message in self.messages:
-            self.d_second += int2ints(currentpointer, 4)
+    def extract_all_messages(self):
+        self.messageslist = []
+        for data in self.datas:
+            messages = self.extract_messages(data)
+            self.messageslist.append(messages)
+        return self.messageslist
+
+    def compile_messages(self, messages):
+        currentpointer = len(messages) * 4
+        data = []
+        for message in messages:
+            data += int2ints(currentpointer, 4)
             currentpointer += len(message)
-        for message in self.messages:
-            self.d_second += message
-        return self.d_second
+        for message in messages:
+            data += message
+        return data
+
+    def compile_and_write(self, outfile):
+        outdata = []
+        for (messages, data) in zip(self.messageslist, self.datas):
+            if messages is None:
+                out = data
+            else:
+                out = self.compile_messages(messages)
+            outdata += self.prepare_for_write(out)
+        self.write(outfile, outdata)
 
 
 if __name__ == "__main__":
@@ -321,18 +331,5 @@ if __name__ == "__main__":
     #address = 0x804308
     address = 0x7f9478
     d = Datapack(infile, address)
-    #d.d_second = self.repl_w_bullshit(self.d_second)
-    #d.d_second = self.repl_w_kanji(self.d_second)
-    #d.edit_top()
-    d.extract_messages()
-    d.compile_messages()
-    #d.d_second = d.repl_w_kanji(d.d_second)
-    d.recompress()
-
-    #d.write(outfile, d.d_first, d.d_second)
-    #d.write(outfile)
-
+    d.compile_and_write(outfile)
     infile.close()
-    print gen_formatted(d.d_first)
-    print
-    print gen_formatted(d.d_second)
