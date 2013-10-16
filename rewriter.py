@@ -62,15 +62,18 @@ def get_kanji_filled_message(kanji_num=0x100):
 if __name__ == "__main__":
     if len(argv) < 4:
         print "\n".join([
-            "python rewriter.py <input file> <output file> <address> <message number>",
+            "python rewriter.py <input file> <output file> <address> <message number> <message group>",
             "    address - Hex address of a data chunk inside rom. Ex: 804c38",
-            "    message number - Which message to edit (omit for all).",
-            "optional: <kanji number> to start filling a message with",])
+            "    message number - Which message to edit (omit for all)."])
         exit(0)
 
     infile, outfile, address = tuple(argv[1:4])
     if len(argv) >= 5:
         messagenum = int(argv[4])
+        if len(argv) >= 6:
+            messagegroup = int(argv[5])
+        else:
+            messagegroup = 1
     else:
         messagenum = None
 
@@ -79,14 +82,11 @@ if __name__ == "__main__":
     outfile = open(outfile, "r+b")
     address = int(address, 16)
     d = Datapack(infile=infile, address=address)
-    messages = d.messageslist[1]
-    if len(argv) >= 6:
-        messages[messagenum - 1] = get_kanji_filled_message(int(argv[5], 16))
+    messages = d.messageslist[messagegroup]
+    if messagenum is None:
+        for i in range(len(messages)):
+            messages = rewrite_message(messages, i+1)
     else:
-        if messagenum is None:
-            for i in range(len(messages)):
-                messages = rewrite_message(messages, i+1)
-        else:
-            messages = rewrite_message(messages, messagenum)
-    d.messageslist[1] = messages
+        messages = rewrite_message(messages, messagenum)
+    d.messageslist[messagegroup] = messages
     d.compile_and_write(outfile)
