@@ -1,7 +1,7 @@
 from sys import argv
 from os import system
 from superdecompressor import Datapack
-from utils import int2ints, str2byte
+from utils import int2ints, str2byte, hexify
 
 specials = {}
 for line in open("specialcodes.txt"):
@@ -70,4 +70,10 @@ if __name__ == "__main__":
                     line = line[1:]
                 message.extend(hexa)
 
-    outfile = open(outfile, 'r+b')
+    d.messageslist[messagegroup][messagenum-1] = message
+    f = open(outfile, 'r+b')
+    try:
+        d.compile_and_write(f)
+    except AssertionError:
+        print "FAILURE %x" % d.baseaddr
+    f.close()
