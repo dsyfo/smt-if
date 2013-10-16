@@ -40,6 +40,7 @@ class Datapack:
                 datas.append(data)
             else:
                 break
+        self.blocks = ((self.infile.tell() - self.baseaddr) / PERIOD) + 1
 
         self.datas = []
         for header, data in zip(headers, datas):
@@ -187,8 +188,11 @@ class Datapack:
         COMPRESSED_FLAG = False
         while data:
             options = [(0, 0)]
+            buff = buff[-1*0xff:]
             for i in range(len(data)):
-                buff = buff[-1*0xff:]
+                if 0x80 + i - 3 >= 0xfe:
+                    break
+
                 k = i
                 compress_index = contains_slice(buff, data[:k])
                 if compress_index is not None:
@@ -198,6 +202,8 @@ class Datapack:
                         while True:
                             if following[:j+1] == window[:j+1]:
                                 j += 1
+                                if 0x80 + (k + j) - 3 >= 0xfe:
+                                    break
                                 if len(window) <= j:
                                     window = window + window
                             else:
@@ -248,7 +254,6 @@ class Datapack:
         return output
 
     def prepare_for_write(self, data):
-        # TODO: Display a warning when new size exceeds limits
         header = ([1, 2, 0, 0] + [0xff, 0xff] +
                   [0, 0] + int2ints(len(data) + HEADER_SIZE, 2) +
                   [0, 0] + [None])
@@ -261,6 +266,11 @@ class Datapack:
 
     def write(self, outfile, data):
         outfile.seek(self.baseaddr + BLOCK_HEADER_SIZE)
+        blocks = (len(data) / PERIOD) + 1
+        if blocks > self.blocks:
+            print "FATAL ERROR; Data too big."
+            assert False
+
         while data:
             chunk, data = data[:BLOCK_SIZE], data[BLOCK_SIZE:]
             chunk += [0] * (BLOCK_SIZE - len(chunk))
