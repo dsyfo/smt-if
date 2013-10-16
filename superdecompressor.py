@@ -266,18 +266,19 @@ class Datapack:
 
     def write(self, outfile, data):
         outfile.seek(self.baseaddr + BLOCK_HEADER_SIZE)
-        blocks = ((len(data) + BLOCK_HEADER_SIZE) / PERIOD) + 1
-        if blocks > self.blocks:
-            print "FATAL ERROR; Data too big."
-            assert False
-
+        blocks = 0
         while data:
+            blocks += 1
             chunk, data = data[:BLOCK_SIZE], data[BLOCK_SIZE:]
             chunk += [0] * (BLOCK_SIZE - len(chunk))
             assert len(chunk) == BLOCK_SIZE
             chunk = map(lambda x: x & 0xff, chunk)
             outfile.write("".join(map(chr, chunk)))
             outfile.seek(outfile.tell() + BLOCK_HEADER_SIZE)
+
+        if blocks > self.blocks:
+            print "FATAL ERROR; Data too big."
+            assert False
 
     def extract_messages(self, data):
         pointers = []
