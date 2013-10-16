@@ -266,7 +266,7 @@ class Datapack:
 
     def write(self, outfile, data):
         outfile.seek(self.baseaddr + BLOCK_HEADER_SIZE)
-        blocks = (len(data) / PERIOD) + 1
+        blocks = ((len(data) + BLOCK_HEADER_SIZE) / PERIOD) + 1
         if blocks > self.blocks:
             print "FATAL ERROR; Data too big."
             assert False

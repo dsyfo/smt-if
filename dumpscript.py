@@ -32,16 +32,19 @@ if __name__ == "__main__":
         print "%x" % address
         try:
             d = Datapack(infile=infile, address=address)
+            totalout = ""
             for i, messages in enumerate(d.messageslist):
                 if messages is None:
                     continue
                 messages = map(gen_formatted, messages)
-                outfile.write("#<@{0:0>7}>\n".format("%x" % address))
                 for num, message in enumerate(messages):
-                    output = "#<{2}.{0:0>2}>\n{1}\n\n".format(num + 1, message, i)
+                    output = "#<{2}.{0:0>3}>\n{1}\n\n".format(num + 1, message, i)
                     for code, replacement in specials.items():
                         output = output.replace(code, replacement)
-                    outfile.write(output)
+                    totalout += output
+            if totalout:
+                outfile.write("#<@{0:0>7}>\n".format("%x" % address))
+                outfile.write(totalout)
         except (AssertionError, IndexError), e:
             # TODO: need to double check each assertion, probably too lenient
             # for example, still won't dump message at 1165fa
