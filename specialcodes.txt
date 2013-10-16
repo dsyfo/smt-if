@@ -1,0 +1,5 @@
+$<ff01> →\n
+$<ff02> ↳
+$<ff04> $<HERO>
+$<ffff> ↯
+$<ff7c> $<PAUSE>
