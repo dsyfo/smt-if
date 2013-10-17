@@ -270,6 +270,7 @@ class Datapack:
         while data:
             blocks += 1
             chunk, data = data[:BLOCK_SIZE], data[BLOCK_SIZE:]
+            length = len(chunk)
             chunk += [0] * (BLOCK_SIZE - len(chunk))
             assert len(chunk) == BLOCK_SIZE
             chunk = map(lambda x: x & 0xff, chunk)
@@ -277,7 +278,8 @@ class Datapack:
             outfile.seek(outfile.tell() + BLOCK_HEADER_SIZE)
 
         if blocks > self.blocks:
-            print "FATAL ERROR; Data too big."
+            print "FATAL ERROR at %s; Data too big." % hexify(self.baseaddr)
+            print "Using %s and %s/2048, available: %s" % (blocks - 1, length, self.blocks)
             assert False
 
     def extract_messages(self, data):
@@ -313,11 +315,19 @@ class Datapack:
         return self.messageslist
 
     def compile_messages(self, messages):
-        currentpointer = len(messages) * 4
+        messages = map(tuple, messages)
+        currentpointer = len(set(messages)) * 4
         data = []
+        done_messages = {}
         for message in messages:
-            data += int2ints(currentpointer, 4)
-            currentpointer += len(message)
+            if message in done_messages:
+                data += done_messages[message]
+            else:
+                pointer = int2ints(currentpointer, 4)
+                data += pointer
+                done_messages[message] = pointer
+                currentpointer += len(message)
+        messages = map(list, messages)
         for message in messages:
             data += message
         return data
@@ -340,7 +350,8 @@ if __name__ == "__main__":
 
     #address = 0x804c38
     #address = 0x804308
-    address = 0x7f9478
+    #address = 0x7f9478
+    address = 0x13b5978
     d = Datapack(infile, address)
     d.compile_and_write(outfile)
     infile.close()
