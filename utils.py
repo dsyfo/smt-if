@@ -30,6 +30,7 @@ byte2str[0xff03] = "\n"
 
 
 def ints2int(data, bigend=True):
+    data = list(data)
     if bigend:
         data.reverse()
     value = 0
