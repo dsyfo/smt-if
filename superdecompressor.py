@@ -289,9 +289,11 @@ class Datapack:
             if pointers and location >= min(pointers):
                 break
             pointers.append(ints2int(data[location:location+4]))
+        self.old_messages = []
         messages = []
         for pointer in pointers:
             message = []
+            old_pointer = pointer
             while True:
                 chars = data[pointer:pointer+2]
                 if not chars:
@@ -301,6 +303,7 @@ class Datapack:
                 pointer += 2
                 if chars == [0xff, 0xff]:
                     break
+            self.old_messages.append((old_pointer, message))
             messages.append(message)
         if None in messages:
             return None
@@ -319,18 +322,36 @@ class Datapack:
         currentpointer = len(set(messages)) * 4
         data = []
         done_messages = {}
+        new_messages = []
         for message in messages:
             if message in done_messages:
-                data += done_messages[message]
+                pointer = done_messages[message]
+                data += pointer
             else:
                 pointer = int2ints(currentpointer, 4)
                 data += pointer
                 done_messages[message] = pointer
                 currentpointer += len(message)
+            new_messages.append((ints2int(pointer), message))
+        self.validate_message_pointers(self.old_messages, new_messages)
         messages = map(list, messages)
         for message in messages:
             data += message
         return data
+
+
+    def validate_message_pointers(self, olds, news):
+        assert len(olds) == len(news)
+        for (ptr_a, msg_a), (ptr_b, msg_b) in zip(olds, news):
+            for (ptr_c, msg_c), (ptr_d, msg_d) in zip(olds, news):
+                if ptr_a == ptr_c:
+                    assert msg_a == msg_c
+                    assert msg_b == msg_d
+                    assert ptr_b == ptr_d
+                if ptr_b == ptr_d:
+                    assert msg_a == msg_c
+                    assert msg_b == msg_d
+
 
     def compile_and_write(self, outfile):
         outdata = []
