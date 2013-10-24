@@ -49,8 +49,12 @@ def int2ints(value, size, bigend=True):
     return data
 
 
-def hexify(data):
-    h = lambda n: "%x" % n
+def hexify(data, pad=None):
+    if pad:
+        h = lambda n: ("{0:0>%s}" % pad).format("%x" % n)
+    else:
+        h = lambda n: "%x" % n
+
     try:
         if type(data) in (list, tuple):
             return map(h, data)
