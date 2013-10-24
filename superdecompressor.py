@@ -1,4 +1,5 @@
 from os import system
+from sys import argv
 from utils import int2ints, ints2int, gen_formatted, hexify
 
 
@@ -364,6 +365,19 @@ class Datapack:
         self.write(outfile, outdata)
 
 
+    def format_decompressed(self, index = 0):
+        data = self.datas[index]
+        pattern = "  ".join([" ".join(["%s"] * 4)] * 4)
+        s = ""
+        h = lambda n: hexify(n, pad=2)
+        while data:
+            current, data = data[:16], data[16:]
+            current += [0] * (16 - len(current))
+            s = "\n".join([s, pattern % tuple(h(current))])
+        return s.strip()
+
+
+
 if __name__ == "__main__":
     system("cp %s %s" % ("smt_if_clean.bin", "smt_if.bin"))
     infile = open("smt_if_clean.bin", 'rb')
@@ -372,7 +386,9 @@ if __name__ == "__main__":
     #address = 0x804c38
     #address = 0x804308
     #address = 0x7f9478
-    address = 0x13b5978
+    #address = 0x13b5978
+    address = int(argv[1], 16)
     d = Datapack(infile, address)
+    print d.format_decompressed()
     d.compile_and_write(outfile)
     infile.close()
